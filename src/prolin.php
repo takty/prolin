@@ -72,7 +72,18 @@ function parse_profile_url( $url ) {
 	if ( $ret ) {
 		list( $label, $url, $id, $opts ) = $ret;
 		return array(
-			'type'  => 'j-global',
+			'type'  => 'youtube-video',
+			'label' => $label,
+			'url'   => $url,
+			'id'    => $id,
+			'opts'  => $opts,
+		);
+	}
+	$ret = get_youtube_channel_id( $uo, $url );
+	if ( $ret ) {
+		list( $label, $url, $id, $opts ) = $ret;
+		return array(
+			'type'  => 'youtube-channel',
 			'label' => $label,
 			'url'   => $url,
 			'id'    => $id,
@@ -106,10 +117,12 @@ function parse_profile_url( $url ) {
  */
 function get_orcid_id( $uo, $href ) {
 	if ( 'orcid.org' === $uo['host'] ) {
-		$id = str_replace( '/', '', $uo['path'] );
-		if ( preg_match( '/^\d{4}-\d{4}-\d{4}-\d{4}$/', $id ) ) {
-			$url = "https://orcid.org/$id";
-			return array( 'ORCID', $url, $id );
+		if ( isset( $uo['path'] ) ) {
+			$id = str_replace( '/', '', $uo['path'] );
+			if ( preg_match( '/^\d{4}-\d{4}-\d{4}-\d{4}$/', $id ) ) {
+				$url = "https://orcid.org/$id";
+				return array( 'ORCID', $url, $id );
+			}
 		}
 		return array( 'ORCID', $href, null );
 	}
@@ -197,11 +210,13 @@ function get_researchmap_id( $uo, $href ) {
  */
 function get_jglobal_id( $uo, $href ) /* cspell:disable-line */ {
 	if ( 'jglobal.jst.go.jp' === $uo['host'] ) {  // cspell:disable-line.
-		$usp = array();
-		parse_str( $uo['query'], $usp );
-		if ( isset( $usp['JGLOBAL_ID'] ) ) {  // cspell:disable-line.
-			$id = $usp['JGLOBAL_ID'];  // cspell:disable-line.
-			return array( 'J-GLOBAL', $href, $id );
+		if ( isset( $uo['query'] ) ) {
+			$usp = array();
+			parse_str( $uo['query'], $usp );
+			if ( isset( $usp['JGLOBAL_ID'] ) ) {  // cspell:disable-line.
+				$id = $usp['JGLOBAL_ID'];  // cspell:disable-line.
+				return array( 'J-GLOBAL', $href, $id );
+			}
 		}
 		return array( 'J-GLOBAL', $href, null );
 	}
@@ -232,10 +247,12 @@ function get_youtube_video_id( $uo, $href ) {
 			$id = $fp;
 		}
 	} elseif ( 1 === $type ) {
-		$usp = array();
-		parse_str( $uo['query'], $usp );
-		if ( isset( $usp['v'] ) ) {
-			$id = $usp['v'];
+		if ( isset( $uo['query'] ) ) {
+			$usp = array();
+			parse_str( $uo['query'], $usp );
+			if ( isset( $usp['v'] ) ) {
+				$id = $usp['v'];
+			}
 		}
 	}
 	if ( $id ) {
@@ -246,10 +263,45 @@ function get_youtube_video_id( $uo, $href ) {
 		foreach ( $fns as $fn ) {
 			$opts[ $fn ] = "https://img.youtube.com/vi/$id/$fn.jpg";
 		}
-		return array( 'Youtube Video', $uo->href, null, $opts );
-	} else {
-		return array( 'Youtube Video', $uo->href, null, null );
+		return array( 'Youtube Video', $href, $id, $opts );
 	}
+	return null;
+}
+
+/**
+ * Gets the YouTube channel ID from a URL object.
+ *
+ * @param array  $uo   The parsed URL object.
+ * @param string $href The original URL.
+ * @return array|null An array of label, URL, and ID, or null if the URL is not a YouTube channel URL.
+ */
+function get_youtube_channel_id( $uo, $href ) {
+	if ( 'www.youtube.com' === $uo['host'] ) {
+		$id = null;
+		if ( strpos( trim( $uo['path'], '/' ), '@' ) === 0 ) {
+			$ps = array_filter( explode( '/', $uo['path'] ) );
+			$fp = $ps[0] ?? null;
+			if ( $fp ) {
+				$id = $fp;
+			}
+		}
+		$f = false;
+		foreach ( explode( '/', $uo['path'] ) as $p ) {
+			if ( $f ) {
+				$id = $p;
+				break;
+			}
+			$f = ( 'channel' === $p || 'user' === $p );
+		}
+		if ( $id ) {
+			$opts = array(
+				'title'    => get_page_title( $href ),
+				'og_image' => get_og_image( $href ),
+			);
+			return array( 'Youtube Channel', $href, $id, $opts );
+		}
+	}
+	return null;
 }
 
 /**
@@ -267,6 +319,7 @@ function get_website_info( $uo, $href ) {
 	return array( 'Website', $href, null, $opts );
 }
 
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -279,8 +332,12 @@ function get_website_info( $uo, $href ) {
 function get_page_title( string $url ): string {
 	$html = file_get_contents( $url );  // phpcs:ignore
 
+	$ie = libxml_use_internal_errors( true );
+
 	$doc = new DOMDocument();
 	$doc->loadHTML( mb_convert_encoding( $html, 'HTML-ENTITIES', 'UTF-8' ) );
+
+	libxml_use_internal_errors( $ie );
 
 	$te = $doc->getElementsByTagName( 'title' )->item( 0 );
 	return $te->nodeValue;  // phpcs:ignore
@@ -295,8 +352,12 @@ function get_page_title( string $url ): string {
 function get_og_image( string $url ): string {
 	$html = file_get_contents( $url );  // phpcs:ignore
 
+	$ie = libxml_use_internal_errors( true );
+
 	$doc = new DOMDocument();
 	$doc->loadHTML( mb_convert_encoding( $html, 'HTML-ENTITIES', 'UTF-8' ) );
+
+	libxml_use_internal_errors( $ie );
 
 	$ms  = $doc->getElementsByTagName( 'meta' );
 	$ret = '';

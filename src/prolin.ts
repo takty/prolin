@@ -50,6 +50,11 @@ export async function parseProfileUrl(url: string) {
 		const [label, url, id, opts] = ret;
 		return { type: 'youtube-video', label, url, id, opts };
 	}
+	ret = await getYoutubeChannelId(uo);
+	if (ret) {
+		const [label, url, id, opts] = ret;
+		return { type: 'youtube-channel', label, url, id, opts };
+	}
 	ret = await getWebsiteInfo(uo);
 	if (ret) {
 		const [label, url, id, opts] = ret;
@@ -70,10 +75,12 @@ export async function parseProfileUrl(url: string) {
  */
 function getOrcidId(uo: URL): [string, string, string | null, object | null] | null {
 	if ('orcid.org' === uo.hostname) {
-		const id = uo.pathname.replace(/\//g, '');
-		if (/^\d{4}-\d{4}-\d{4}-\d{4}$/.test(id)) {
-			const url = `https://orcid.org/${id}`;
-			return ['ORCID', url, id, null];
+		if (uo.pathname) {
+			const id = uo.pathname.replace(/\//g, '');
+			if (/^\d{4}-\d{4}-\d{4}-\d{4}$/.test(id)) {
+				const url = `https://orcid.org/${id}`;
+				return ['ORCID', url, id, null];
+			}
 		}
 		return ['ORCID', uo.href, null, null];
 	}
@@ -151,10 +158,12 @@ function getResearchmapId(uo: URL): [string, string, string | null, object | nul
  */
 function getJGlobalId(uo: URL): [string, string, string | null, object | null] | null {
 	if ('jglobal.jst.go.jp' === uo.hostname) {  // cspell:disable-line
-		const usp = new URLSearchParams(uo.search);
-		if (usp.has('JGLOBAL_ID')) {  // cspell:disable-line
-			const id = usp.get('JGLOBAL_ID');  // cspell:disable-line
-			return ['J-GLOBAL', uo.href, id, null];
+		if (uo.search) {
+			const usp = new URLSearchParams(uo.search);
+			if (usp.has('JGLOBAL_ID')) {  // cspell:disable-line
+				const id = usp.get('JGLOBAL_ID');  // cspell:disable-line
+				return ['J-GLOBAL', uo.href, id, null];
+			}
 		}
 		return ['J-GLOBAL', uo.href, null, null];
 	}
@@ -184,9 +193,11 @@ async function getYoutubeVideoId(uo: URL): Promise<[string, string, string | nul
 			id = fp;
 		}
 	} else if (1 === type) {
-		const usp = new URLSearchParams(uo.search);
-		if (usp.has('v')) {
-			id = usp.get('v');
+		if (uo.search) {
+			const usp = new URLSearchParams(uo.search);
+			if (usp.has('v')) {
+				id = usp.get('v');
+			}
 		}
 	}
 	if (id) {
@@ -197,10 +208,44 @@ async function getYoutubeVideoId(uo: URL): Promise<[string, string, string | nul
 		for (const fn of fns) {
 			opts[fn] = `https://img.youtube.com/vi/${id}/${fn}.jpg`;
 		}
-		return ['Youtube Video', uo.href, null, opts];
-	} else {
-		return ['Youtube Video', uo.href, null, null];
+		return ['Youtube Video', uo.href, id, opts];
 	}
+	return null;
+}
+
+/**
+ * Gets the YouTube channel ID from a URL object.
+ *
+ * @param uo - The URL object to get the ID from.
+ * @returns An array of label, URL, and ID, or null if the URL is not a YouTube channel URL.
+ */
+async function getYoutubeChannelId(uo: URL): Promise<[string, string, string | null, object | null] | null> {
+	if ('www.youtube.com' === uo.hostname) {
+		let id = null;
+		if (uo.pathname.replace(/^\/+|\/+$/g,'').startsWith('@')) {
+			const ps = uo.pathname.split('/').filter(e => e.length);
+			const fp = ps?.[0];
+			if (fp) {
+				id = fp;
+			}
+		}
+		let f = false;
+		for (const p of uo.pathname.split('/')) {
+			if (f) {
+				id = p;
+				break;
+			}
+			f = ('channel' === p || 'user' === p);
+		}
+		if (id) {
+			const opts : { [key: string]: unknown } = {
+				title   : await getPageTitle(uo.href),
+				og_image: await getOgImage(uo.href),
+			};
+			return ['Youtube Channel', uo.href, id, opts];
+		}
+	}
+	return null;
 }
 
 /**

@@ -687,6 +687,17 @@ async function parseProfileUrl(url) {
             opts
         };
     }
+    ret = await getYoutubeChannelId(uo);
+    if (ret) {
+        const [label, url, id, opts] = ret;
+        return {
+            type: "youtube-channel",
+            label,
+            url,
+            id,
+            opts
+        };
+    }
     ret = await getWebsiteInfo(uo);
     if (ret) {
         const [label, url, id, opts] = ret;
@@ -708,15 +719,17 @@ async function parseProfileUrl(url) {
  * @returns An array of label, URL, and ID, or null if the URL is not an ORCID URL.
  */ function getOrcidId(uo) {
     if ("orcid.org" === uo.hostname) {
-        const id = uo.pathname.replace(/\//g, "");
-        if (/^\d{4}-\d{4}-\d{4}-\d{4}$/.test(id)) {
-            const url = `https://orcid.org/${id}`;
-            return [
-                "ORCID",
-                url,
-                id,
-                null
-            ];
+        if (uo.pathname) {
+            const id = uo.pathname.replace(/\//g, "");
+            if (/^\d{4}-\d{4}-\d{4}-\d{4}$/.test(id)) {
+                const url = `https://orcid.org/${id}`;
+                return [
+                    "ORCID",
+                    url,
+                    id,
+                    null
+                ];
+            }
         }
         return [
             "ORCID",
@@ -827,15 +840,17 @@ async function parseProfileUrl(url) {
  * @returns An array of label, URL, and ID, or null if the URL is not a J-GLOBAL URL.
  */ function getJGlobalId(uo) {
     if ("jglobal.jst.go.jp" === uo.hostname) {
-        const usp = new URLSearchParams(uo.search);
-        if (usp.has("JGLOBAL_ID")) {
-            const id = usp.get("JGLOBAL_ID"); // cspell:disable-line
-            return [
-                "J-GLOBAL",
-                uo.href,
-                id,
-                null
-            ];
+        if (uo.search) {
+            const usp = new URLSearchParams(uo.search);
+            if (usp.has("JGLOBAL_ID")) {
+                const id = usp.get("JGLOBAL_ID"); // cspell:disable-line
+                return [
+                    "J-GLOBAL",
+                    uo.href,
+                    id,
+                    null
+                ];
+            }
         }
         return [
             "J-GLOBAL",
@@ -864,8 +879,10 @@ async function parseProfileUrl(url) {
         const fp = ps?.[0];
         if (fp) id = fp;
     } else if (1 === type) {
-        const usp = new URLSearchParams(uo.search);
-        if (usp.has("v")) id = usp.get("v");
+        if (uo.search) {
+            const usp = new URLSearchParams(uo.search);
+            if (usp.has("v")) id = usp.get("v");
+        }
     }
     if (id) {
         const fns = [
@@ -882,15 +899,47 @@ async function parseProfileUrl(url) {
         return [
             "Youtube Video",
             uo.href,
-            null,
+            id,
             opts
         ];
-    } else return [
-        "Youtube Video",
-        uo.href,
-        null,
-        null
-    ];
+    }
+    return null;
+}
+/**
+ * Gets the YouTube channel ID from a URL object.
+ *
+ * @param uo - The URL object to get the ID from.
+ * @returns An array of label, URL, and ID, or null if the URL is not a YouTube channel URL.
+ */ async function getYoutubeChannelId(uo) {
+    if ("www.youtube.com" === uo.hostname) {
+        let id = null;
+        if (uo.pathname.replace(/^\/+|\/+$/g, "").startsWith("@")) {
+            const ps = uo.pathname.split("/").filter((e)=>e.length);
+            const fp = ps?.[0];
+            if (fp) id = fp;
+        }
+        let f = false;
+        for (const p of uo.pathname.split("/")){
+            if (f) {
+                id = p;
+                break;
+            }
+            f = "channel" === p || "user" === p;
+        }
+        if (id) {
+            const opts = {
+                title: await getPageTitle(uo.href),
+                og_image: await getOgImage(uo.href)
+            };
+            return [
+                "Youtube Channel",
+                uo.href,
+                id,
+                opts
+            ];
+        }
+    }
+    return null;
 }
 /**
  * Gets the information of the website from a URL object.
