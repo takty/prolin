@@ -19,11 +19,27 @@
 		}
 
 		& li a {
-			display: grid;
+			display    : grid;
 			place-items: center;
 
-			border: 1px solid gray;
+			border : 1px solid gray;
 			padding: 0.5rem;
+
+			aspect-ratio: 16/5;
+		}
+
+		& li.youtube-video a {
+			font-size: 0;
+
+			background-position: center;
+			background-size    : cover;
+			aspect-ratio       : 16/9;
+		}
+
+		& li.website a {
+			background-position: center;
+			background-size    : cover;
+			aspect-ratio       : 1200/630;
 		}
 	}
 </style>
@@ -40,13 +56,22 @@
 		</div>
 
 		<div>
-			<textarea id="links" style="--cols:48ch;" rows="10">
+			<textarea id="links" style="--cols:48ch;" rows="20" cols="40">
+Personal Pages
 https://scholar.google.co.jp/citations?user=RIVI39oAAAAJ
 https://orcid.org/0009-0007-5392-1347
 https://nrid.nii.ac.jp/ja/nrid/1000030546536/
 https://nrid.nii.ac.jp/en/nrid/1000030546536/
 https://researchmap.jp/takty
-			</textarea>
+https://jglobal.jst.go.jp/detail?JGLOBAL_ID=201001071654675108
+
+YouTube
+https://www.youtube.com/watch?v=e6DSgEQttsc
+
+Other Websites
+https://www.jstage.jst.go.jp/browse/plantbiotechnology/-char/ja
+https://ja.wikipedia.org/wiki/%E3%83%89%E3%83%8A%E3%83%AB%E3%83%89%E3%83%BB%E3%83%8E%E3%83%BC%E3%83%9E%E3%83%B3
+</textarea>
 		</div>
 
 		<div>
